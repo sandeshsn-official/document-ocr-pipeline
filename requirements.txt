@@ -1,0 +1,6 @@
+paddleocr
+Pillow
+opencv-python
+PyMuPDF
+numpy
+pytesseract

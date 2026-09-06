@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+
+input/
+output/
+
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
+.env
+.vscode/
