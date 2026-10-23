@@ -14,44 +14,53 @@ Stages 1-12 and Stage 13A-13G remain untouched.
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-STAGE13G_FILE = PROJECT_ROOT / "src" / "13g_generic_knowledge_query.py"
+STAGE13OLLAMA_FILE = PROJECT_ROOT / "src" / "ollama_natural_language_query.py"
 
 
-_stage13g = None
+_stage13ollama = None
 
 
-def _load_stage13g():
-    """Load Stage 13G without executing its CLI entry point."""
-    global _stage13g
+def _load_stage13ollama():
+    """Load the Ollama query layer without executing its CLI entry point."""
+    global _stage13ollama
 
-    if _stage13g is not None:
-        return _stage13g
+    if _stage13ollama is not None:
+        return _stage13ollama
 
-    if not STAGE13G_FILE.exists():
+    if not STAGE13OLLAMA_FILE.exists():
         raise FileNotFoundError(
-            f"Stage 13G source not found: {STAGE13G_FILE}"
+            f"Ollama query source not found: {STAGE13OLLAMA_FILE}"
         )
 
     spec = importlib.util.spec_from_file_location(
-        "ocr_stage13g_backend",
-        STAGE13G_FILE,
+        "ocr_stage13ollama_backend",
+        STAGE13OLLAMA_FILE,
     )
-
     if spec is None or spec.loader is None:
         raise ImportError(
-            f"Could not load Stage 13G module: {STAGE13G_FILE}"
+            f"Could not load Ollama query module: {STAGE13OLLAMA_FILE}"
         )
 
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-
-    _stage13g = module
+    _stage13ollama = module
     return module
+
+
+def _load_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"Required knowledge index not found: {path}")
+    with path.open("r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected a JSON object in {path}")
+    return data
 
 
 def _job_knowledge_dir(job_id: str) -> Path:
@@ -83,8 +92,7 @@ def _load_cross_document_index(job_id: str) -> dict[str, Any]:
             f"{job_id}: {path}"
         )
 
-    stage13g = _load_stage13g()
-    return stage13g.load_json(path)
+    return _load_json(path)
 
 
 def _load_knowledge_index(job_id: str) -> dict[str, Any]:
@@ -102,8 +110,7 @@ def _load_knowledge_index(job_id: str) -> dict[str, Any]:
             f"{job_id}: {path}"
         )
 
-    stage13g = _load_stage13g()
-    return stage13g.load_json(path)
+    return _load_json(path)
 
 
 def query_knowledge(
@@ -111,11 +118,10 @@ def query_knowledge(
     query: str,
 ) -> dict[str, Any]:
     """
-    Execute the deterministic Stage 13G query against a job.
+    Interpret and answer a natural-language question with local Ollama.
 
-    Stage 13G first attempts exact entity lookup through the Stage 13F
-    cross-document index. If no entity matches, it performs exact generic
-    value lookup through the Stage 13A knowledge index.
+    Ollama interprets the question; Stage 13A/13F remain the evidence sources.
+    The OCR indexes and provenance are read-only.
 
     Returns a JSON-serializable dictionary suitable for a Django
     JsonResponse.
@@ -126,15 +132,14 @@ def query_knowledge(
     if not str(query).strip():
         raise ValueError("query is required.")
 
-    stage13g = _load_stage13g()
-
+    ollama_query = _load_stage13ollama()
     index = _load_cross_document_index(job_id)
     knowledge_index = _load_knowledge_index(job_id)
 
-    return stage13g.query_index(
+    return ollama_query.query_knowledge_with_ollama(
+        query,
         index,
         knowledge_index,
-        query,
     )
 
 

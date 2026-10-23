@@ -1519,15 +1519,36 @@ def find_learned_match(
                 if len(differences) != 1:
                     continue
 
+
                 position = differences[0][0]
+
+                # Reject invalid positions before indexing the original text.
+                if (
+                    position < 0
+                    or position >= len(original_match_text)
+                ):
+                    continue
+
+                # Resolve the learned target Unicode character safely.
                 try:
                     target_char = unicodedata.lookup(str(verified_name))
                 except (KeyError, TypeError):
                     continue
+
                 if _stage09_char_class(target_char) != str(verified_class):
                     continue
 
-                if position >= len(original_match_text):
+                # The original character must be either the learned OCR
+                # witness or the verified target. Never alter an unrelated
+                # character merely because it occupies the same position.
+                original_char = original_match_text[position]
+                witness_char = differences[0][1]
+
+                if original_char not in {witness_char, target_char}:
+                    continue
+
+                # No correction is necessary if the original is already right.
+                if original_char == target_char:
                     continue
 
                 verified_value = (
@@ -1535,11 +1556,17 @@ def find_learned_match(
                     + target_char
                     + original_match_text[position + 1:]
                 )
+
+                # A learned correction must produce an actual text change.
+                if verified_value == original_match_text:
+                    continue
+
                 return {
                     "verified_text": verified_value,
                     "repeat_count": pattern.get("repeat_count", 0),
                     "learned_family": family,
                 }
+
 
             elif family == "local":
                 if _local_signature_matches(original_text, source_text, key_data):
