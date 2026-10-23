@@ -166,6 +166,7 @@ def process_page(page_file):
 
 print("=" * 70)
 print("FINAL DOCUMENT DATA BUILDER")
+print("PER-PDF JSON OUTPUT")
 print("=" * 70)
 
 
@@ -199,6 +200,18 @@ active_document_names = {
     path.stem
     for path in active_pdfs
 }
+
+
+# Do not clean existing outputs when the input folder is empty.
+# An empty folder can mean PDFs were moved temporarily or the wrong
+# project directory is being used; treating it as a successful run
+# would otherwise delete previously generated data.
+if not active_pdfs:
+
+    raise FileNotFoundError(
+        "No PDF files found in the input directory. "
+        f"Existing reconstructed/final data was left untouched. Input: {INPUT_DIR.resolve()}"
+    )
 
 
 print()
@@ -244,14 +257,42 @@ if RECONSTRUCTED_DIR.exists():
 
 # ============================================================
 # CLEAN STALE FINAL DATA
+#
+# Every active PDF gets its own JSON file.
+# Old combined all_documents.json is removed.
 # ============================================================
 
 if OUTPUT_DIR.exists():
 
-    for child in OUTPUT_DIR.iterdir():
+    # --------------------------------------------------------
+    # REMOVE OLD COMBINED JSON
+    # --------------------------------------------------------
 
-        if child.name == "all_documents.json":
-            continue
+    combined_file = (
+        OUTPUT_DIR
+        / "all_documents.json"
+    )
+
+    if combined_file.exists():
+
+        print()
+
+        print(
+            "Removing old combined JSON:"
+        )
+
+        print(
+            combined_file
+        )
+
+        combined_file.unlink()
+
+
+    # --------------------------------------------------------
+    # REMOVE STALE DOCUMENT OUTPUTS
+    # --------------------------------------------------------
+
+    for child in OUTPUT_DIR.iterdir():
 
         if child.is_file():
 
@@ -264,6 +305,7 @@ if OUTPUT_DIR.exists():
         else:
 
             continue
+
 
         if document_name not in active_document_names:
 
@@ -284,16 +326,19 @@ if OUTPUT_DIR.exists():
             else:
 
                 try:
+
                     child.unlink()
+
                 except FileNotFoundError:
+
                     pass
 
 
 # ============================================================
-# PROCESS ONLY ACTIVE INPUT DOCUMENTS
+# PROCESS EACH PDF INDEPENDENTLY
 # ============================================================
 
-all_documents = []
+documents_processed = 0
 
 
 for pdf in active_pdfs:
@@ -305,7 +350,9 @@ for pdf in active_pdfs:
         / document_name
     )
 
+
     print()
+
     print("=" * 70)
 
     print(
@@ -358,7 +405,18 @@ for pdf in active_pdfs:
     )
 
 
+    if not page_files:
+
+        print()
+        print(
+            "ERROR: No reconstructed page JSON files found; "
+            "existing final output for this document was not overwritten."
+        )
+        continue
+
+
     pages = []
+    page_errors = []
 
 
     # --------------------------------------------------------
@@ -392,7 +450,7 @@ for pdf in active_pdfs:
             print(
                 error
             )
-
+            page_errors.append((page_file, error))
             continue
 
 
@@ -454,6 +512,17 @@ for pdf in active_pdfs:
             )
 
 
+    # Never publish a partial document as if every page succeeded.
+    # Keep any existing final JSON untouched so it can be investigated.
+    if page_errors:
+
+        print()
+        print(
+            f"ERROR: {len(page_errors)} page(s) failed for {document_name}. "
+            "Skipping final JSON write to avoid silently producing incomplete data."
+        )
+        continue
+
     # --------------------------------------------------------
     # DOCUMENT OBJECT
     # --------------------------------------------------------
@@ -466,6 +535,9 @@ for pdf in active_pdfs:
         "document_id":
             document_name,
 
+        "source_pdf":
+            pdf.name,
+
         "page_count":
             len(pages),
 
@@ -474,13 +546,8 @@ for pdf in active_pdfs:
     }
 
 
-    all_documents.append(
-        document_result
-    )
-
-
     # --------------------------------------------------------
-    # SAVE INDIVIDUAL DOCUMENT
+    # SAVE ONLY THIS DOCUMENT
     # --------------------------------------------------------
 
     document_output = (
@@ -503,45 +570,17 @@ for pdf in active_pdfs:
         )
 
 
+    documents_processed += 1
+
+
     print()
 
     print(
-        f"Saved: "
-        f"{document_output}"
+        f"Saved individual JSON:"
     )
 
-
-# ============================================================
-# SAVE COMBINED DOCUMENT
-# ============================================================
-
-combined_output = {
-
-    "document_count":
-        len(all_documents),
-
-    "documents":
-        all_documents
-}
-
-
-combined_file = (
-    OUTPUT_DIR
-    / "all_documents.json"
-)
-
-
-with open(
-    combined_file,
-    "w",
-    encoding="utf-8"
-) as file:
-
-    json.dump(
-        combined_output,
-        file,
-        indent=2,
-        ensure_ascii=False
+    print(
+        document_output
     )
 
 
@@ -562,18 +601,33 @@ print("=" * 70)
 print()
 
 print(
-    f"Documents: "
-    f"{len(all_documents)}"
+    f"Active PDFs: "
+    f"{len(active_pdfs)}"
+)
+
+print(
+    f"Documents processed: "
+    f"{documents_processed}"
 )
 
 print()
 
 print(
-    "Combined JSON:"
+    "Output directory:"
 )
 
 print(
-    combined_file
+    OUTPUT_DIR
+)
+
+print()
+
+print(
+    "Each PDF now has its own JSON file."
+)
+
+print(
+    "No all_documents.json is generated."
 )
 
 print()

@@ -12,3 +12,29 @@ output/
 
 .env
 .vscode/
+
+# Python caches and environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local databases
+*.sqlite3
+*.db
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Local editor and operating-system files
+.vscode/
+.DS_Store
+
+# OCR inputs and generated outputs
+input/
+output/
+
+# Local OCR review evidence and learned memory
+learning/ocr_learning_memory.json

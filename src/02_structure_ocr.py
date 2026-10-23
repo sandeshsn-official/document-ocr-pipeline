@@ -4,11 +4,6 @@ import re
 from pathlib import Path
 from difflib import SequenceMatcher
 
-import cv2
-import pytesseract
-from paddleocr import PaddleOCR
-
-
 # ============================================================
 # CPU / PADDLE SETTINGS
 # ============================================================
@@ -17,6 +12,10 @@ os.environ["FLAGS_enable_pir_api"] = "0"
 os.environ["PADDLE_PDX_ENABLE_MKLDNN_BYDEFAULT"] = "0"
 os.environ["OMP_NUM_THREADS"] = "4"
 os.environ["MKL_NUM_THREADS"] = "4"
+
+import cv2
+import pytesseract
+from paddleocr import PaddleOCR
 
 
 # ============================================================
@@ -546,35 +545,22 @@ def find_table_json(
         )
     )
 
-    if table_json.exists():
-
-        return table_json
-
-    return None
-
     candidates = [
 
-        Path(
-            "output/table_only"
-        ) / document_name / (
-            Path(page_name).stem
-            + "_res.json"
+        # Preferred layout: table JSON grouped by document.
+        Path("output/table_only") / document_name / (
+            Path(page_name).stem + "_res.json"
         ),
 
-        Path(
-            "output/table_only"
-        ) / (
-            Path(page_name).stem
-            + "_res.json"
+        # Compatibility with older flat output layouts.
+        Path("output/table_only") / (
+            Path(page_name).stem + "_res.json"
         ),
 
-        Path(
-            "output/table_only"
-        ) / document_name / (
-            Path(page_name).stem
-            + ".json"
-        )
-
+        # Compatibility with table JSON files without the _res suffix.
+        Path("output/table_only") / document_name / (
+            Path(page_name).stem + ".json"
+        ),
     ]
 
     for path in candidates:
@@ -898,10 +884,15 @@ print("LOADING PADDLE OCR")
 print("=" * 70)
 
 
+# CPU is the portable default for Windows systems without a supported
+# NVIDIA/CUDA Paddle build. Set OCR_DEVICE=gpu:0 explicitly on a machine
+# whose Paddle installation supports GPU inference.
+ocr_device = os.environ.get("OCR_DEVICE", "cpu").strip() or "cpu"
+
 ocr = PaddleOCR(
     lang="en",
     engine="paddle",
-    device="cpu",
+    device=ocr_device,
 
     use_doc_orientation_classify=False,
     use_doc_unwarping=False,
@@ -983,12 +974,26 @@ document_dirs = sorted(
     [
         INPUT_PAGES / document_name
         for document_name in active_document_names
-        if (
-            INPUT_PAGES
-            / document_name
-        ).is_dir()
+        if (INPUT_PAGES / document_name).is_dir()
     ]
 )
+
+missing_page_dirs = sorted(
+    active_document_names
+    - {directory.name for directory in document_dirs}
+)
+
+if missing_page_dirs:
+    missing_text = ", ".join(missing_page_dirs)
+    raise FileNotFoundError(
+        "Stage 2 cannot find Stage 1 page-image folders for: "
+        f"{missing_text}. Run Stage 1 successfully before Stage 2."
+    )
+
+if not active_pdfs:
+    raise FileNotFoundError(
+        f"No PDF files found in {INPUT_DIR.resolve()}."
+    )
 
 # ============================================================
 # PROCESS EACH DOCUMENT
@@ -1021,6 +1026,11 @@ for document_dir in document_dirs:
         f"{len(page_files)}"
     )
 
+    if not page_files:
+        raise FileNotFoundError(
+            f"No page PNG images found for document '{document_name}' "
+            f"in {document_dir.resolve()}."
+        )
 
     document_pages = []
 

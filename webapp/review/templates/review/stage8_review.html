@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Stage 8 Review</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 24px;
+            background: #f5f5f5;
+            color: #222;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .header h1 {
+            margin-top: 0;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .label {
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .value {
+            background: #f7f7f7;
+            padding: 12px;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 12px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+
+        .original {
+            background: #2e7d32;
+            color: white;
+        }
+
+        .source {
+            background: #1565c0;
+            color: white;
+        }
+
+        .save {
+            background: #6a1b9a;
+            color: white;
+        }
+
+        .skip {
+            background: #757575;
+            color: white;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            box-sizing: border-box;
+            padding: 12px;
+            font-size: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            resize: vertical;
+        }
+
+        .metadata {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+        .metadata div {
+            background: #f7f7f7;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 60px 20px;
+            background: white;
+            border-radius: 10px;
+        }
+
+        @media (max-width: 700px) {
+            .comparison {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>Stage 8 — Manual OCR Review</h1>
+
+        <p>
+            <strong>Document:</strong>
+            {{ document_name }}
+        </p>
+
+        <p>
+            <strong>Review item:</strong>
+            {{ index|add:"1" }} / {{ queue_length }}
+        </p>
+
+        <p>
+            <strong>Unresolved:</strong>
+            {{ progress.unresolved }}
+            &nbsp;&nbsp;
+            <strong>Human actions:</strong>
+            {{ progress.human_actions }}
+            &nbsp;&nbsp;
+            <strong>Skipped:</strong>
+            {{ progress.skipped }}
+        </p>
+    </div>
+
+
+    {% if item %}
+
+    <div class="card">
+
+        <h2>Review Information</h2>
+
+        <div class="metadata">
+
+            <div>
+                <strong>Page</strong><br>
+                {{ item.page }}
+            </div>
+
+            {% if item.table %}
+            <div>
+                <strong>Table</strong><br>
+                {{ item.table }}
+            </div>
+            {% endif %}
+
+            {% if item.row %}
+            <div>
+                <strong>Row</strong><br>
+                {{ item.row }}
+            </div>
+            {% endif %}
+
+            {% if item.column %}
+            <div>
+                <strong>Column</strong><br>
+                {{ item.column }}
+            </div>
+            {% endif %}
+
+            {% if item.paragraph_block %}
+            <div>
+                <strong>Paragraph Block</strong><br>
+                {{ item.paragraph_block }}
+            </div>
+            {% endif %}
+
+        </div>
+
+    </div>
+
+<div class="card">
+
+    <h2>Source Image</h2>
+
+    <div style="text-align: center;">
+
+        <img
+            src="/review/{{ job_id }}/stage8/{{ document_name|urlencode }}/{{ index }}/image/"
+            alt="Stage 8 review image"
+            style="
+                max-width: 100%;
+                max-height: 900px;
+                border: 1px solid #ccc;
+                border-radius: 6px;
+                object-fit: contain;
+            "
+        >
+
+    </div>
+
+</div>
+
+    <div class="card">
+
+        <h2>OCR Comparison</h2>
+
+        <div class="comparison">
+
+            <div>
+                <div class="label">
+                    Original OCR
+                </div>
+
+                <div class="value">
+                    {{ item.original_text }}
+                </div>
+            </div>
+
+
+            <div>
+                <div class="label">
+                    Source Image OCR
+                </div>
+
+                <div class="value">
+                    {{ item.source_text }}
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="card">
+
+        <h2>Verification</h2>
+
+        <div class="value">
+            <strong>Decision:</strong>
+            {{ item.verification.decision }}
+
+            <br><br>
+
+            <strong>Reason:</strong>
+            {{ item.verification.reason }}
+
+            <br><br>
+
+            <strong>Confidence:</strong>
+            {{ item.verification.confidence }}
+        </div>
+
+    </div>
+
+
+    <div class="card">
+
+        <h2>Correction</h2>
+
+        <textarea id="verified-text">{{ item.original_text }}</textarea>
+
+        <div class="actions">
+
+            <button
+                class="original"
+                onclick="submitAction('confirm_original')">
+                Keep Original OCR
+            </button>
+
+            <button
+                class="source"
+                onclick="submitAction('confirm_source')">
+                Use Source OCR
+            </button>
+
+            <button
+                class="save"
+                onclick="submitAction('save_correction')">
+                Save Correction
+            </button>
+
+            <button
+                class="skip"
+                onclick="submitAction('skip')">
+                Skip
+            </button>
+
+        </div>
+
+    </div>
+
+
+    {% else %}
+
+    <div class="empty">
+
+        <h2>No unresolved review items</h2>
+
+        <p>
+            Stage 8 has no currently unresolved items for this document.
+        </p>
+
+    </div>
+
+    {% endif %}
+
+</div>
+
+
+<script>
+
+async function submitAction(action) {
+
+    const url =
+        "/review/{{ job_id }}/stage8/{{ document_name|urlencode }}/{{ index }}/action/";
+
+    const payload = {
+        action: action
+    };
+
+    if (action === "save_correction") {
+        payload.verified_text =
+            document.getElementById("verified-text").value;
+    }
+
+    const csrfToken = document.cookie
+    .split("; ")
+    .find(row => row.startsWith("csrftoken="))
+    ?.split("=")[1];
+
+const response = await fetch(url, {
+    method: "POST",
+    headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrfToken
+    },
+    body: JSON.stringify(payload)
+});
+
+    const data = await response.json();
+
+    if (!response.ok) {
+        alert(
+            "Stage 8 action failed:\n\n" +
+            (data.error || "Unknown error")
+        );
+        return;
+    }
+
+    /*
+     * The backend has already persisted the decision.
+     * Reload the current page so the queue/progress are
+     * obtained again from the real Stage 8 service.
+     */
+    window.location.reload();
+}
+
+</script>
+
+</body>
+</html>

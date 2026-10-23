@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Knowledge Explorer</title>
+
+
+
+    <style>
+
+        \* {
+
+            box-sizing: border-box;
+
+        }
+
+
+
+        body {
+
+            margin: 0;
+
+            font-family: Arial, Helvetica, sans-serif;
+
+            background: #f4f6f8;
+
+            color: #202124;
+
+        }
+
+
+
+        .container {
+
+            width: min(1200px, 94%);
+
+            margin: 30px auto;
+
+        }
+
+
+
+        h1 {
+
+            margin-bottom: 6px;
+
+        }
+
+
+
+        .subtitle {
+
+            color: #666;
+
+            margin-top: 0;
+
+            margin-bottom: 25px;
+
+        }
+
+
+
+        .search-box {
+
+            background: white;
+
+            padding: 20px;
+
+            border-radius: 10px;
+
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+
+            display: flex;
+
+            gap: 10px;
+
+        }
+
+
+
+        .search-box input {
+
+            flex: 1;
+
+            padding: 12px 14px;
+
+            border: 1px solid #ccc;
+
+            border-radius: 6px;
+
+            font-size: 16px;
+
+        }
+
+
+
+        .search-box button {
+
+            padding: 12px 22px;
+
+            border: none;
+
+            border-radius: 6px;
+
+            background: #1a73e8;
+
+            color: white;
+
+            font-size: 16px;
+
+            cursor: pointer;
+
+        }
+
+
+
+        .search-box button:hover {
+
+            background: #1557b0;
+
+        }
+
+
+
+        #status {
+
+            margin-top: 18px;
+
+        }
+
+
+
+        .error {
+
+            background: #fdecea;
+
+            color: #b3261e;
+
+            padding: 14px;
+
+            border-radius: 7px;
+
+        }
+
+
+
+        .result {
+
+            margin-top: 25px;
+
+        }
+
+
+
+        .card {
+
+            background: white;
+
+            border-radius: 10px;
+
+            padding: 20px;
+
+            margin-bottom: 18px;
+
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+
+        }
+
+
+
+        .card h2,
+
+        .card h3 {
+
+            margin-top: 0;
+
+        }
+
+
+
+        .summary {
+
+            display: grid;
+
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+
+            gap: 12px;
+
+        }
+
+
+
+        .stat {
+
+            background: #f7f8fa;
+
+            padding: 14px;
+
+            border-radius: 7px;
+
+        }
+
+
+
+        .stat-label {
+
+            color: #666;
+
+            font-size: 13px;
+
+            margin-bottom: 5px;
+
+        }
+
+
+
+        .stat-value {
+
+            font-size: 20px;
+
+            font-weight: bold;
+
+        }
+
+
+
+        .occurrence {
+
+            border: 1px solid #ddd;
+
+            border-radius: 8px;
+
+            padding: 16px;
+
+            margin-top: 15px;
+
+        }
+
+
+
+        .metadata {
+
+            display: grid;
+
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+
+            gap: 8px;
+
+            margin-bottom: 15px;
+
+        }
+
+
+
+        .metadata div {
+
+            background: #f8f9fa;
+
+            padding: 9px;
+
+            border-radius: 5px;
+
+        }
+
+
+
+        .metadata strong {
+
+            display: block;
+
+            font-size: 12px;
+
+            color: #666;
+
+            margin-bottom: 3px;
+
+        }
+
+
+
+        table {
+
+            width: 100%;
+
+            border-collapse: collapse;
+
+            margin-top: 12px;
+
+        }
+
+
+
+        th,
+
+        td {
+
+            border: 1px solid #ddd;
+
+            padding: 10px;
+
+            text-align: left;
+
+            vertical-align: top;
+
+        }
+
+
+
+        th {
+
+            background: #f1f3f4;
+
+        }
+
+
+
+        .verified {
+
+            color: #137333;
+
+            font-weight: bold;
+
+        }
+
+        .verification-note {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-left: 4px solid #137333;
+            border-radius: 4px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .verification-note.review-required {
+            border-left-color: #b26a00;
+        }
+
+
+
+        .provenance {
+
+            margin-top: 15px;
+
+            padding: 12px;
+
+            background: #f8f9fa;
+
+            border-left: 4px solid #1a73e8;
+
+            font-size: 13px;
+
+        }
+
+
+
+        .hidden {
+
+            display: none;
+
+        }
+
+
+
+        @media (max-width: 700px) {
+
+            .search-box {
+
+                flex-direction: column;
+
+            }
+
+
+
+            .search-box button {
+
+                width: 100%;
+
+            }
+
+
+
+            table {
+
+                display: block;
+
+                overflow-x: auto;
+
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+
+<body>
+
+
+
+<div class="container">
+
+
+
+    <h1>Knowledge Explorer</h1>
+
+
+
+    <p class="subtitle">
+
+        Search verified information extracted from the uploaded documents.
+
+    </p>
+
+
+
+    <form id="searchForm" class="search-box">
+
+        <input
+
+            id="queryInput"
+
+            type="text"
+
+            placeholder="Enter an entity or value, e.g. A-01"
+
+            autocomplete="off"
+
+            required
+
+        >
+
+
+
+        <button type="submit">
+
+            Search
+
+        </button>
+
+    </form>
+
+
+
+    <div id="status"></div>
+
+
+
+    <div id="result" class="result hidden"></div>
+
+
+
+</div>
+
+
+
+<script>
+
+    const jobId = "{{ job_id }}";
+
+
+
+    const searchForm = document.getElementById("searchForm");
+
+    const queryInput = document.getElementById("queryInput");
+
+    const statusBox = document.getElementById("status");
+
+    const resultBox = document.getElementById("result");
+
+
+
+    searchForm.addEventListener("submit", async function(event) {
+
+        event.preventDefault();
+
+
+
+        const query = queryInput.value.trim();
+
+
+
+        if (!query) {
+
+            return;
+
+        }
+
+
+
+        statusBox.innerHTML = "Searching...";
+
+        resultBox.classList.add("hidden");
+
+        resultBox.innerHTML = "";
+
+
+
+        try {
+
+            const url =
+
+                `/review/${encodeURIComponent(jobId)}/knowledge/query/?q=` +
+
+                encodeURIComponent(query);
+
+
+
+            const response = await fetch(url);
+
+
+
+            const data = await response.json();
+
+
+
+            if (!response.ok) {
+
+                throw new Error(data.error || "Knowledge query failed.");
+
+            }
+
+
+
+            
+            // Render deterministic OCR results first.
+            // These remain visible even if Ollama is unavailable.
+            renderResult(data);
+            statusBox.innerHTML = "";
+
+            // Request an optional explanation separately.
+            const explanationUrl =
+                `/review/${encodeURIComponent(jobId)}/knowledge/explain/?q=` +
+                encodeURIComponent(query);
+
+            const explanationCard = document.createElement("div");
+            explanationCard.className = "card";
+            explanationCard.innerHTML =
+                "<h3>Ollama Explanation</h3><p>Generating explanation...</p>";
+
+            resultBox.appendChild(explanationCard);
+
+            try {
+                const explanationResponse = await fetch(explanationUrl);
+                const explanationData = await explanationResponse.json();
+
+                if (!explanationResponse.ok) {
+                    throw new Error(
+                        explanationData.error || "Explanation request failed."
+                    );
+                }
+
+                const explanationText =
+                    explanationData.explanation ||
+                    "An explanation is unavailable. The OCR search results above remain available.";
+
+                const adapterStatus =
+                    explanationData.adapter_status || "UNKNOWN";
+
+                explanationCard.innerHTML = `
+                    <h3>Ollama Explanation</h3>
+                    <p>${escapeHtml(explanationText)}</p>
+                    <p>
+                        <strong>Explanation status:</strong>
+                        ${escapeHtml(adapterStatus)}
+                    </p>
+                    <p>
+                        <strong>Evidence authority:</strong>
+                        ${escapeHtml(
+                            explanationData.evidence_authority ||
+                            "DETERMINISTIC_RETRIEVAL"
+                        )}
+                    </p>
+                `;
+            } catch (explanationError) {
+                explanationCard.innerHTML = `
+                    <h3>Ollama Explanation</h3>
+                    <p>
+                        Explanation unavailable. Your deterministic OCR
+                        search results above are still available.
+                    </p>
+                `;
+            }
+
+
+
+
+        } catch (error) {
+
+
+
+            statusBox.innerHTML = `
+
+                <div class="error">
+
+                    ${escapeHtml(error.message)}
+
+                </div>
+
+            `;
+
+        }
+
+    });
+
+
+
+
+
+function renderResult(data) {
+
+    resultBox.classList.remove("hidden");
+
+
+
+    // Stage 13G returns the matched result inside data.results[].
+
+    const result = Array.isArray(data.results)
+
+        ? (data.results[0] || {})
+
+        : {};
+
+
+
+    const stats = result.statistics || {};
+
+    const occurrences = Array.isArray(result.occurrences)
+
+        ? result.occurrences
+
+        : [];
+
+
+
+    const queryInfo = data.query || {};
+
+    const displayValue =
+
+        result.display_value ||
+
+        queryInfo.extracted_value ||
+
+        queryInfo.original ||
+
+        "";
+
+
+
+    let html = "";
+
+
+
+    html += `
+
+        <div class="card">
+
+            <h2>${escapeHtml(displayValue)}</h2>
+
+
+
+            <div class="summary">
+
+                <div class="stat">
+
+                    <div class="stat-label">Match Type</div>
+
+                    <div class="stat-value">
+
+                        ${escapeHtml(data.match_type || "—")}
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="stat">
+
+                    <div class="stat-label">Documents</div>
+
+                    <div class="stat-value">
+
+                        ${stats.document_count ?? 0}
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="stat">
+
+                    <div class="stat-label">Tables</div>
+
+                    <div class="stat-value">
+
+                        ${stats.table_count ?? 0}
+
+                    </div>
+
+                </div>
+
+
+
+                <div class="stat">
+
+                    <div class="stat-label">Occurrences</div>
+
+                    <div class="stat-value">
+
+                        ${stats.occurrence_count ?? occurrences.length}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+
+            <p>
+
+                <strong>Entity ID:</strong>
+
+                ${escapeHtml(result.entity_id || "—")}
+
+            </p>
+
+
+
+            <p>
+
+                <strong>Link status:</strong>
+
+                ${escapeHtml(result.link_status || "—")}
+
+            </p>
+
+
+
+            <p>
+
+                <strong>Cross-document:</strong>
+
+                ${result.cross_document ? "Yes" : "No"}
+
+            </p>
+
+        </div>
+
+    `;
+
+
+
+    if (!occurrences.length) {
+
+        html += `
+
+            <div class="card">
+
+                No matching occurrences were found.
+
+            </div>
+
+        `;
+
+
+
+        resultBox.innerHTML = html;
+
+        return;
+
+    }
+
+
+
+    occurrences.forEach((occurrence, occurrenceIndex) => {
+
+        html += `
+
+            <div class="card">
+
+                <h3>Occurrence ${occurrenceIndex + 1}</h3>
+
+
+
+                <div class="metadata">
+
+                    <div>
+
+                        <strong>Document</strong>
+
+                        ${escapeHtml(occurrence.document_id || "—")}
+
+                    </div>
+
+
+
+                    <div>
+
+                        <strong>Page</strong>
+
+                        ${escapeHtml(String(occurrence.page ?? "—"))}
+
+                    </div>
+
+
+
+                    <div>
+
+                        <strong>Table</strong>
+
+                        ${escapeHtml(String(occurrence.table_index ?? "—"))}
+
+                    </div>
+
+
+
+                    <div>
+
+                        <strong>Source Row</strong>
+
+                        ${escapeHtml(
+
+                            String(
+
+                                occurrence.source_row_value ??
+
+                                occurrence.source_row_index ??
+
+                                "—"
+
+                            )
+
+                        )}
+
+                    </div>
+
+                </div>
+
+        `;
+
+
+
+        const fields = occurrence.fields || {};
+
+
+
+const fieldEntries = Array.isArray(fields)
+
+            ? fields.map((field, index) => [
+
+                field.field_key || field.key || `field\_${index + 1}`,
+
+                field
+
+            ])
+
+            : Object.entries(fields);
+
+
+
+        if (fieldEntries.length) {
+
+            html += `
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Field</th>
+
+                            <th>Value</th>
+
+                            <th>Column</th>
+
+                            <th>Verification</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+            `;
+
+
+
+            fieldEntries.forEach(([fieldKey, field]) => {
+
+                const header =
+
+                    field.header ||
+
+                    field.field_header ||
+
+                    fieldKey;
+
+
+
+                const value =
+
+                    field.value ??
+
+                    field.text ??
+
+                    "";
+
+
+
+                const column =
+
+                    field.column_index ??
+
+                    field.column ??
+
+                    "—";
+
+
+
+                const fieldProvenance =
+
+                    field.provenance && typeof field.provenance === "object"
+
+                        ? field.provenance
+
+                        : {};
+
+
+
+                const verification =
+
+                    field.verification_status ||
+
+                    field.final_verification_status ||
+
+                    fieldProvenance.verification_status ||
+
+                    fieldProvenance.final_verification_status ||
+
+                    fieldProvenance.verification ||
+
+                    field.status ||
+
+                    "—";
+
+
+
+                html += `
+
+                    <tr>
+
+                        <td>${escapeHtml(String(header))}</td>
+
+                        <td>${escapeHtml(String(value))}</td>
+
+                        <td>${escapeHtml(String(column))}</td>
+
+                        <td class="${
+
+                            String(verification)
+
+                                .toLowerCase()
+
+                                .includes("verified")
+
+                                ? "verified"
+
+                                : ""
+
+                        }">
+
+                            ${escapeHtml(String(verification))}
+
+                        </td>
+
+                    </tr>
+
+                `;
+
+            });
+
+
+
+            html += `
+
+                    </tbody>
+
+                </table>
+
+            `;
+
+        }
+
+
+
+        const verificationStatuses = fieldEntries.map(([, field]) => {
+            const fieldProvenance =
+                field.provenance && typeof field.provenance === "object"
+                    ? field.provenance
+                    : {};
+
+            return (
+                field.verification_status ||
+                field.final_verification_status ||
+                fieldProvenance.verification_status ||
+                fieldProvenance.final_verification_status ||
+                fieldProvenance.verification ||
+                field.status ||
+                "UNVERIFIED"
+            );
+        });
+
+        const needsReview = verificationStatuses.some(status =>
+            String(status).toUpperCase().includes("REVIEW")
+        );
+
+        html += `
+            <div class="verification-note ${needsReview ? "review-required" : ""}">
+                <strong>Verification information</strong><br>
+                <code>SOURCE_VERIFIED</code> means automated checks support agreement
+                with source evidence; it does not necessarily mean a person manually
+                checked the value.<br>
+                ${
+                    needsReview
+                        ? "At least one field requires additional review."
+                        : "Review the status shown for each field before relying on the extracted data."
+                }
+            </div>
+        `;
+
+        const provenance = occurrence.provenance || {};
+
+
+
+        html += `
+
+                <div class="provenance">
+
+                    <strong>Provenance</strong><br><br>
+
+
+
+                    Document:
+
+                    ${escapeHtml(String(
+
+                        provenance.document_id ||
+
+                        occurrence.document_id ||
+
+                        "—"
+
+                    ))}
+
+                    <br>
+
+
+
+                    Page:
+
+                    ${escapeHtml(String(
+
+                        provenance.page ??
+
+                        occurrence.page ??
+
+                        "—"
+
+                    ))}
+
+                    <br>
+
+
+
+                    Table:
+
+                    ${escapeHtml(String(
+
+                        provenance.table_index ??
+
+                        occurrence.table_index ??
+
+                        "—"
+
+                    ))}
+
+                    <br>
+
+
+
+                    Row:
+
+                    ${escapeHtml(String(
+
+                        provenance.row ??
+
+                        occurrence.source_row_value ??
+
+                        occurrence.source_row_index ??
+
+                        "—"
+
+                    ))}
+
+                </div>
+
+            </div>
+
+        `;
+
+    });
+
+
+
+    resultBox.innerHTML = html;
+
+}
+
+
+
+
+
+
+
+
+
+    function escapeHtml(value) {
+
+
+
+        return String(value)
+
+            .replace(/&/g, "&amp;")
+
+            .replace(/</g, "&lt;")
+
+            .replace(/>/g, "&gt;")
+
+            .replace(/"/g, "&quot;")
+
+            .replace(/'/g, "&#039;");
+
+    }
+
+</script>
+
+
+
+</body>
+
+</html>
