@@ -78,6 +78,39 @@ class ComparisonEngineTests(unittest.TestCase):
         self.assertEqual(temperature["value_relation"], "DIFFERENT")
         self.assertEqual(temperature["right"]["verification_status"], "HIGH_RISK_AGREEMENT_REVIEW")
 
+    def test_numeric_disagreement_is_ambiguous(self):
+        left = make_table(
+            "L", ["Sensor ID", "Temperature"], [["SEN-104", "23.8"]]
+        )
+        right = make_table(
+            "R", ["Sensor ID", "Temperature"], [["SEN-104", "24.4"]]
+        )
+        right["rows"][1]["cells"][1]["provenance"].update({
+            "verification_status": "NUMERIC_DISAGREEMENT",
+            "verification_reason": "Conflicting OCR values require review.",
+            "source_ocr_confidence": 0.555,
+        })
+
+        li = make_index(left, [(2, "SEN-104")])
+        ri = make_index(right, [(2, "SEN-104")])
+        result = compare_tables(left, right, left_index=li, right_index=ri)
+
+        row = next(r for r in result["rows"] if r["row_key"] == "sen-104")
+        temperature = next(
+            c for c in row["cells"] if c["field"] == "Temperature"
+        )
+
+        self.assertEqual(temperature["status"], "AMBIGUOUS")
+        self.assertEqual(temperature["value_relation"], "DIFFERENT")
+        self.assertTrue(temperature["right"]["verification_uncertain"])
+        self.assertEqual(
+            temperature["right"]["verification_status"],
+            "NUMERIC_DISAGREEMENT",
+        )
+        self.assertEqual(temperature["left"]["value"], "23.8")
+        self.assertEqual(temperature["right"]["value"], "24.4")
+
+
     def test_same_value_is_unchanged(self):
         left = make_table("L", ["Sensor ID", "Voltage"], [["SEN-104", "5.01"]])
         right = make_table("R", ["Sensor ID", "Voltage"], [["SEN-104", "5.01"]])
