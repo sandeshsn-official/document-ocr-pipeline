@@ -8,6 +8,10 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .stage_artifact_history import (
+    begin_stage_capture,
+    finish_stage_capture,
+)
 
 # ============================================================================
 # PROJECT PATHS
@@ -225,6 +229,33 @@ def _write_stage_log(
     )
 
 
+def _finish_stage_history_safely(
+    job: dict,
+    history_token: dict,
+    *,
+    return_code: int,
+    error: str | None,
+) -> str | None:
+    """Finalize a stage history record without masking the stage's own error.
+
+    Returns an error message if history finalization fails; callers decide
+    whether that secondary failure should fail an otherwise successful stage.
+    """
+    try:
+        finish_stage_capture(
+            job,
+            history_token,
+            return_code=return_code,
+            error=error,
+        )
+    except Exception as exc:
+        return (
+            "Stage history finalization failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+    return None
+
+
 # ============================================================================
 # STAGE EXECUTION
 # ============================================================================
@@ -239,7 +270,8 @@ def run_stage(
     Execute one existing OCR stage.
 
     Stage output is streamed live to the terminal and written
-    to the stage log while the process is running.
+    to the stage log while the process is running. Output artifacts are
+    captured before and after each invocation for stage-history tracking.
     """
 
     if stage not in STAGES:
@@ -262,21 +294,18 @@ def run_stage(
     )
 
     log_path = _stage_log_path(job, stage)
-
     command = [
         PYTHON,
         "-u",
         str(script),
     ]
-
-    output_lines = []
+    output_lines: list[str] = []
 
     with log_path.open(
         "w",
         encoding="utf-8",
         errors="replace",
     ) as log_file:
-
         log_file.write(
             f"STAGE {stage}\n"
             + "=" * 80
@@ -284,68 +313,174 @@ def run_stage(
         )
         log_file.flush()
 
-        process = subprocess.Popen(
-            command,
-            cwd=str(job["job_dir"]),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-        )
+        # Preserve existing outputs immediately before the stage can alter them.
+        # If this fails, abort before launching the OCR stage.
+        history_token = begin_stage_capture(job, stage)
+
+        try:
+            process = subprocess.Popen(
+                command,
+                cwd=str(job["job_dir"]),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+            )
+        except Exception as exc:
+            error = f"Could not launch stage {stage}: {exc}"
+            history_error = _finish_stage_history_safely(
+                job,
+                history_token,
+                return_code=1,
+                error=error,
+            )
+            if history_error:
+                error = f"{error} Additionally, {history_error}"
+
+            _set_status(
+                job,
+                status="failed",
+                stage=stage,
+                error=error,
+            )
+            raise
 
         try:
             assert process.stdout is not None
 
             for line in process.stdout:
                 print(line, end="", flush=True)
-
                 log_file.write(line)
                 log_file.flush()
-
                 output_lines.append(line)
 
             return_code = process.wait()
 
         except KeyboardInterrupt:
-            process.terminate()
+            interrupt_error = "Stage interrupted by user."
+            cleanup_error = None
+            try:
+                if process.poll() is None:
+                    process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+            except Exception as exc:
+                cleanup_error = (
+                    f"Could not fully stop interrupted stage: "
+                    f"{type(exc).__name__}: {exc}"
+                )
 
             try:
-                process.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
+                log_file.write("\n\nPROCESS INTERRUPTED BY USER\n")
+                if cleanup_error:
+                    log_file.write(cleanup_error + "\n")
+                log_file.flush()
+            except Exception:
+                # Do not replace KeyboardInterrupt with a logging failure.
+                pass
 
-            log_file.write(
-                "\n\nPROCESS INTERRUPTED BY USER\n"
+            history_error = _finish_stage_history_safely(
+                job,
+                history_token,
+                return_code=130,
+                error=interrupt_error,
             )
-            log_file.flush()
-
+            status_error = interrupt_error
+            if cleanup_error:
+                status_error += " " + cleanup_error
+            if history_error:
+                status_error += " " + history_error
             _set_status(
                 job,
                 status="interrupted",
                 stage=stage,
-                error="Stage interrupted by user.",
+                error=status_error,
             )
+            raise
 
+        except Exception as exc:
+            # Stop the child if output streaming or waiting fails. Cleanup errors
+            # are recorded, but must not mask the original exception.
+            cleanup_error = None
+            try:
+                if process.poll() is None:
+                    process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+            except Exception as stop_exc:
+                cleanup_error = (
+                    f"Could not fully stop stage process: "
+                    f"{type(stop_exc).__name__}: {stop_exc}"
+                )
+
+            error = (
+                f"Unexpected error during stage {stage}: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            if cleanup_error:
+                error += " " + cleanup_error
+
+            history_error = _finish_stage_history_safely(
+                job,
+                history_token,
+                return_code=1,
+                error=error,
+            )
+            if history_error:
+                error += " " + history_error
+
+            _set_status(
+                job,
+                status="failed",
+                stage=stage,
+                error=error,
+            )
             raise
 
     stdout = "".join(output_lines)
+    history_error = _finish_stage_history_safely(
+        job,
+        history_token,
+        return_code=return_code,
+        error=(
+            None
+            if return_code == 0
+            else f"Stage {stage} failed with exit code {return_code}."
+        ),
+    )
 
-    if return_code != 0:
+    if history_error:
         error = (
-            f"Stage {stage} failed with exit code "
-            f"{return_code}."
+            f"Stage {stage} completed with exit code {return_code}, "
+            f"but its output history could not be finalized. {history_error}"
         )
-
         _set_status(
             job,
             status="failed",
             stage=stage,
             error=error,
         )
+        raise RuntimeError(error)
 
+    if return_code != 0:
+        error = (
+            f"Stage {stage} failed with exit code "
+            f"{return_code}."
+        )
+        _set_status(
+            job,
+            status="failed",
+            stage=stage,
+            error=error,
+        )
         raise RuntimeError(
             error
             + "\n\n"

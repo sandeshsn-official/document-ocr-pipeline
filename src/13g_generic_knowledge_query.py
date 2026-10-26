@@ -583,6 +583,67 @@ def query_knowledge_values(
 
 
 
+    # Search paragraph text and OCR text blocks independently from table records.
+    # Older indexes without text_items remain valid.
+    text_items = knowledge_index.get("text_items", [])
+
+    if isinstance(text_items, list):
+        for item in text_items:
+            if not isinstance(item, dict):
+                continue
+
+            value = str(
+                item.get("searchable_text")
+                or item.get("final_verified_text")
+                or item.get("verified_text")
+                or item.get("text")
+                or ""
+            ).strip()
+
+            if not value or normalize(value) != query_normalized:
+                continue
+
+            matches.append({
+                "record_id": item.get("text_item_id"),
+                "document_id": item.get("document_id"),
+                "document": item.get("document"),
+                "source_pdf": item.get("source_pdf"),
+                "page": item.get("page"),
+                "table_id": None,
+                "table_index": None,
+                "source_row_index": None,
+                "source_row_value": None,
+                "identifier_candidates": [],
+                "fields": {
+                    "text": {
+                        "value": value,
+                        "kind": item.get("kind"),
+                    }
+                },
+                "matched_fields": [{
+                    "field_key": "text",
+                    "value": value,
+                    "kind": item.get("kind"),
+                }],
+                "provenance": {
+                    **(
+                        item.get("provenance")
+                        if isinstance(item.get("provenance"), dict)
+                        else {}
+                    ),
+                    "bbox": item.get("bbox"),
+                    "confidence": item.get("confidence"),
+                    "verification_status": item.get("verification_status"),
+                    "verification_reason": item.get("verification_reason"),
+                    "source_ocr": item.get("source_ocr"),
+                    "source_ocr_confidence": item.get("source_ocr_confidence"),
+                    "source_ocr_variants": item.get("source_ocr_variants"),
+                    "original_text": item.get("text"),
+                    "verified_text": item.get("verified_text"),
+                    "final_verified_text": item.get("final_verified_text"),
+                },
+            })
+
     return matches
 
 

@@ -1617,6 +1617,7 @@ def build_index(
     documents = []
     tables = []
     records = []
+    text_items = []
 
     value_index: dict[
         str,
@@ -1687,6 +1688,105 @@ def build_index(
                 "page": page_number,
                 "tables": [],
             }
+
+                        # Index paragraph content separately from table records.
+            paragraph = page.get("paragraph", {})
+            if not isinstance(paragraph, dict):
+                paragraph = {}
+
+            paragraph_text = str(
+                paragraph.get("text") or ""
+            ).strip()
+
+            if paragraph_text:
+                text_items.append({
+                    "text_item_id": (
+                        f"{document_id}:page:{page_number}:paragraph"
+                    ),
+                    "kind": "paragraph",
+                    "document_id": document_id,
+                    "document": document.get("document"),
+                    "source_pdf": document.get("source_pdf"),
+                    "page": page_number,
+                    "text": paragraph_text,
+                    "searchable_text": paragraph_text,
+                    "bbox": None,
+                    "confidence": paragraph.get(
+                        "average_confidence"
+                    ),
+                    "verification_status": None,
+                    "provenance": {
+                        "source_file": str(
+                            source_path.relative_to(job_dir)
+                        ),
+                        "source_field": "paragraph.text",
+                    },
+                })
+
+            raw_blocks = paragraph.get("text_blocks", [])
+            if not isinstance(raw_blocks, list):
+                raw_blocks = []
+
+            for block_index, block in enumerate(raw_blocks, start=1):
+                if not isinstance(block, dict):
+                    continue
+
+                original_text = str(block.get("text") or "").strip()
+                verified_text = str(
+                    block.get("verified_text") or ""
+                ).strip()
+                final_verified_text = str(
+                    block.get("final_verified_text") or ""
+                ).strip()
+
+                searchable_text = (
+                    final_verified_text
+                    or verified_text
+                    or original_text
+                )
+
+                if not searchable_text:
+                    continue
+
+                text_items.append({
+                    "text_item_id": (
+                        f"{document_id}:page:{page_number}:"
+                        f"text_block:{block_index}"
+                    ),
+                    "kind": "text_block",
+                    "document_id": document_id,
+                    "document": document.get("document"),
+                    "source_pdf": document.get("source_pdf"),
+                    "page": page_number,
+                    "block_index": block_index,
+                    "text": original_text,
+                    "verified_text": verified_text,
+                    "final_verified_text": final_verified_text,
+                    "searchable_text": searchable_text,
+                    "bbox": bbox_list(block.get("bbox")),
+                    "confidence": block.get("confidence"),
+                    "source_ocr": block.get("source_ocr"),
+                    "source_ocr_confidence": block.get(
+                        "source_ocr_confidence"
+                    ),
+                    "verification_status": (
+                        block.get("final_verification_status")
+                        or block.get("verification_status")
+                    ),
+                    "verification_reason": block.get(
+                        "verification_reason"
+                    ),
+                    "source_ocr_variants": block.get(
+                        "source_ocr_variants"
+                    ),
+                    "provenance": {
+                        "source_file": str(
+                            source_path.relative_to(job_dir)
+                        ),
+                        "source_field": "paragraph.text_blocks",
+                        "block_index": block_index,
+                    },
+                })
 
             raw_tables = page.get(
                 "tables",
@@ -1906,6 +2006,7 @@ def build_index(
             "records": len(
                 records
             ),
+            "text_items": len(text_items),
             "cells": sum(
                 table[
                     "cell_count"
@@ -1920,6 +2021,7 @@ def build_index(
         "documents": documents,
         "tables": tables,
         "records": records,
+        "text_items": text_items,
         "value_index": (
             deduped_value_index
         ),
