@@ -65,6 +65,41 @@ class StageArtifactHistoryTests(unittest.TestCase):
         self.assertEqual(manifest["runs"][0]["error"], "synthetic failure")
         self.assertIn("partial.txt", manifest["runs"][0]["after_state"])
 
+
+    def test_preserves_multiple_versions_across_repeated_stage_runs(self):
+        target = self.output_dir / "pages" / "Calibration_Report" / "page_0001.png"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"first-run-artifact")
+
+        first_token = begin_stage_capture(self.job, 1)
+        finish_stage_capture(self.job, first_token, return_code=0)
+
+        manifest = load_stage_history(self.job_dir)
+        first_ref = manifest["runs"][-1]["after_state"][
+            "pages/Calibration_Report/page_0001.png"
+        ]
+
+        second_token = begin_stage_capture(self.job, 1)
+        target.write_bytes(b"second-run-artifact")
+        finish_stage_capture(self.job, second_token, return_code=0)
+
+        manifest = load_stage_history(self.job_dir)
+        second_ref = manifest["runs"][-1]["after_state"][
+            "pages/Calibration_Report/page_0001.png"
+        ]
+
+        self.assertEqual(
+            read_artifact(self.job_dir, first_ref),
+            b"first-run-artifact",
+        )
+        self.assertEqual(
+            read_artifact(self.job_dir, second_ref),
+            b"second-run-artifact",
+        )
+        self.assertNotEqual(first_ref["sha256"], second_ref["sha256"])
+        self.assertEqual(len(manifest["runs"]), 2)
+
+
     def test_content_objects_are_deduplicated(self):
         (self.output_dir / "a.txt").write_text("same", encoding="utf-8")
         token = begin_stage_capture(self.job, 1)

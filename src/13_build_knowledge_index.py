@@ -2030,6 +2030,159 @@ def build_index(
     return knowledge
 
 
+def _document_owner(item: dict[str, Any]) -> str:
+    owner = item.get("document_id")
+    if owner:
+        return str(owner)
+
+    provenance = item.get("table_provenance")
+    if isinstance(provenance, dict):
+        owner = provenance.get("document_id")
+        if owner:
+            return str(owner)
+
+    return ""
+
+
+def _mark_document_status(
+    knowledge: dict[str, Any],
+    current_ids: set[str],
+) -> dict[str, Any]:
+    """Attach current/historical status to all document-owned evidence."""
+    status_by_id = {}
+
+    for document in knowledge.get("documents", []):
+        document_id = str(document.get("document_id", ""))
+        status = (
+            "CURRENT"
+            if document_id in current_ids
+            else "SOURCE_MISSING_HISTORICAL"
+        )
+        document["source_status"] = status
+        status_by_id[document_id] = status
+
+    for section in ("tables", "records", "text_items"):
+        for item in knowledge.get(section, []):
+            owner = _document_owner(item)
+            item["source_status"] = status_by_id.get(
+                owner, "SOURCE_MISSING_HISTORICAL"
+            )
+
+    for occurrences in knowledge.get("value_index", {}).values():
+        for occurrence in occurrences:
+            owner = _document_owner(occurrence)
+            occurrence["source_status"] = status_by_id.get(
+                owner, "SOURCE_MISSING_HISTORICAL"
+            )
+
+    return knowledge
+
+
+def merge_knowledge_indexes(
+    previous: dict[str, Any] | None,
+    current: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Retain missing sources and replace returning sources without duplication."""
+    if previous is None and current is None:
+        raise ValueError("Cannot merge two empty knowledge indexes.")
+
+    if current is None:
+        result = json.loads(json.dumps(previous))
+        return _mark_document_status(result, set())
+
+    if previous is None:
+        result = current
+        current_ids = {
+            str(document.get("document_id", ""))
+            for document in result.get("documents", [])
+        }
+        return _mark_document_status(result, current_ids)
+
+    result = json.loads(json.dumps(current))
+    current_ids = {
+        str(document.get("document_id", ""))
+        for document in current.get("documents", [])
+    }
+
+    historical_ids = {
+        str(document.get("document_id", ""))
+        for document in previous.get("documents", [])
+        if str(document.get("document_id", "")) not in current_ids
+    }
+
+    # Retain only documents that are absent from the fresh rebuild.
+    result["documents"] = [
+        document
+        for document in previous.get("documents", [])
+        if str(document.get("document_id", "")) in historical_ids
+    ] + result.get("documents", [])
+
+    for section in ("tables", "records", "text_items"):
+        old_items = [
+            item
+            for item in previous.get(section, [])
+            if _document_owner(item) in historical_ids
+        ]
+        result[section] = old_items + result.get(section, [])
+
+    merged_values = defaultdict(list)
+
+    for index_source, keep_ids in (
+        (previous.get("value_index", {}), historical_ids),
+        (current.get("value_index", {}), current_ids),
+    ):
+        for value, occurrences in index_source.items():
+            for occurrence in occurrences:
+                if _document_owner(occurrence) in keep_ids:
+                    merged_values[value].append(occurrence)
+
+    # Deduplicate identical occurrences without collapsing distinct provenance.
+    deduped_values = {}
+    for value, occurrences in merged_values.items():
+        seen = set()
+        unique = []
+        for occurrence in occurrences:
+            key = json.dumps(
+                occurrence, sort_keys=True, ensure_ascii=False
+            )
+            if key not in seen:
+                seen.add(key)
+                unique.append(occurrence)
+        if unique:
+            deduped_values[value] = unique
+
+    result["value_index"] = deduped_values
+    _mark_document_status(result, current_ids)
+
+    tables = result.get("tables", [])
+    header_count = sum(
+        1
+        for table in tables
+        if table.get("header_detection", {}).get("detected", False)
+    )
+
+    result["statistics"] = {
+        "documents": len(result.get("documents", [])),
+        "pages": sum(
+            len(document.get("pages", []))
+            for document in result.get("documents", [])
+        ),
+        "tables": len(tables),
+        "tables_with_detected_headers": header_count,
+        "tables_without_confident_headers": len(tables) - header_count,
+        "records": len(result.get("records", [])),
+        "text_items": len(result.get("text_items", [])),
+        "cells": sum(
+            table.get("cell_count", 0)
+            for table in tables
+        ),
+        "indexed_unique_values": len(result.get("value_index", {})),
+    }
+
+    result["generated_at_utc"] = now_utc()
+    return result
+
+
 # ============================================================================
 # CLI
 # ============================================================================
@@ -2074,16 +2227,36 @@ def main() -> int:
     else:
         job_dir = newest_job()
 
-    knowledge = build_index(
-        job_dir
-    )
-
     output_path = (
         job_dir
         / "output"
         / "knowledge"
         / "knowledge_index.json"
     )
+
+    previous = None
+    if output_path.is_file():
+        try:
+            previous = json.loads(
+                output_path.read_text(encoding="utf-8")
+            )
+        except (json.JSONDecodeError, OSError) as exc:
+            raise RuntimeError(
+                "Existing knowledge index cannot be read safely; "
+                "refusing to overwrite it."
+            ) from exc
+
+    active_sources = verified_files(job_dir)
+
+    if active_sources:
+        current = build_index(job_dir)
+        knowledge = merge_knowledge_indexes(previous, current)
+    elif previous is not None:
+        knowledge = merge_knowledge_indexes(previous, None)
+    else:
+        raise FileNotFoundError(
+            "No verified JSON files and no previous knowledge index exist."
+        )
 
     json_dump(
         output_path,

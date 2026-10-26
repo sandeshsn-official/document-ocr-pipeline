@@ -219,6 +219,11 @@ def collect_linked_records(
                 {
                     "record_id": record.get("record_id"),
                     "document_id": record.get("document_id"),
+                    "source_status": (
+                        record.get("source_status")
+                        or cell.get("source_status")
+                        or "UNKNOWN"
+                    ),
                     "page": record.get("page"),
                     "table_id": record.get("table_id"),
                     "table_index": record.get("table_index"),
@@ -269,6 +274,7 @@ def build_entities(
             merged[key] = {
                 "record_id": occurrence.get("record_id"),
                 "document_id": occurrence.get("document_id"),
+                "source_status": occurrence.get("source_status") or "UNKNOWN",
                 "page": occurrence.get("page"),
                 "table_id": occurrence.get("table_id"),
                 "table_index": occurrence.get("table_index"),
@@ -284,10 +290,17 @@ def build_entities(
 
         for match in verified_index_matches:
             key = build_occurrence_key(match)
+            if key in merged:
+                merged[key]["source_status"] = (
+                    match.get("source_status")
+                    or merged[key].get("source_status")
+                    or "UNKNOWN"
+                )
             if key not in merged:
                 merged[key] = {
                     "record_id": match.get("record_id"),
                     "document_id": match.get("document_id"),
+                    "source_status": match.get("source_status") or "UNKNOWN",
                     "page": match.get("page"),
                     "table_id": match.get("table_id"),
                     "table_index": match.get("table_index"),

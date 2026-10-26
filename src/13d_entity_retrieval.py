@@ -260,6 +260,11 @@ def build_retrieval_entities(
     {
         "record_id": record_id,
         "document_id": document_id,
+        "source_status": (
+            source_record.get("source_status")
+            or occurrence.get("source_status")
+            or "UNKNOWN"
+        ),
         "page": page,
         "table_id": table_id,
         "table_index": table_index,

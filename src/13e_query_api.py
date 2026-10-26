@@ -265,7 +265,8 @@ def summarize_result(result: dict[str, Any]) -> str:
                 f"Document={record.get('document_id')} | "
                 f"Page={record.get('page')} | "
                 f"Table={record.get('table_index')} | "
-                f"Row={record.get('source_row_index')}"
+                f"Row={record.get('source_row_index')} | "
+                f"Source status={record.get('source_status', 'UNKNOWN')}"
             )
 
             fields = record.get("fields", [])

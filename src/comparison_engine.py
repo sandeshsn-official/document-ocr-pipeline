@@ -320,10 +320,10 @@ def compare_tables(
             row_status = "REMOVED"
         elif key in left_duplicates or key in right_duplicates:
             row_status = "AMBIGUOUS"
-        elif any(c["status"] in {"CHANGED", "ADDED", "REMOVED"} for c in cell_results):
-            row_status = "CHANGED"
         elif any(c["status"] == "AMBIGUOUS" for c in cell_results):
             row_status = "AMBIGUOUS"
+        elif any(c["status"] in {"CHANGED", "ADDED", "REMOVED"} for c in cell_results):
+            row_status = "CHANGED"
         else:
             row_status = "UNCHANGED"
 

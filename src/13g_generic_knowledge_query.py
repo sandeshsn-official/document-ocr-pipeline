@@ -521,6 +521,8 @@ def query_knowledge_values(
 
             ),
 
+            "source_status": record.get("source_status") or "UNKNOWN",
+
             "page": record.get(
 
                 "page"
@@ -606,6 +608,7 @@ def query_knowledge_values(
             matches.append({
                 "record_id": item.get("text_item_id"),
                 "document_id": item.get("document_id"),
+                "source_status": item.get("source_status") or "UNKNOWN",
                 "document": item.get("document"),
                 "source_pdf": item.get("source_pdf"),
                 "page": item.get("page"),

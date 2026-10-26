@@ -155,6 +155,7 @@ def extract_entity_occurrences(entity: dict[str, Any]) -> list[dict[str, Any]]:
         occurrence = {
             "record_id": record.get("record_id"),
             "document_id": record.get("document_id"),
+            "source_status": record.get("source_status") or "UNKNOWN",
             "page": record.get("page"),
             "table_id": record.get("table_id"),
             "table_index": record.get("table_index"),
